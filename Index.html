@@ -219,6 +219,12 @@ async function submitTest(){
 
   if(error){
 
+    console.log({
+    name: userName,
+    questions: questions,
+    answers: answers,
+    compiled_answers: compiledAnswers
+    })
     alert("Error: " + error.message)
     console.error(error)
 
