@@ -1,0 +1,600 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Personality Test Admin Map</title>
+
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      background: #111;
+      color: white;
+      font-family: Arial, sans-serif;
+      display: flex;
+      height: 100vh;
+    }
+
+    #loginScreen {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: #111;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 1000;
+    }
+
+    #loginScreen.hidden {
+      display: none;
+    }
+
+    .loginCard {
+      background: #1d1d1d;
+      padding: 40px;
+      border-radius: 16px;
+      width: 300px;
+      text-align: center;
+    }
+
+    .loginCard h2 {
+      margin-bottom: 20px;
+      font-size: 24px;
+    }
+
+    .loginCard input {
+      width: 100%;
+      padding: 12px;
+      margin: 10px 0;
+      background: #222;
+      color: white;
+      border: 1px solid #333;
+      border-radius: 8px;
+      font-size: 14px;
+    }
+
+    .loginCard button {
+      width: 100%;
+      padding: 12px;
+      margin-top: 20px;
+      background: #6c5cff;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 16px;
+      font-weight: bold;
+    }
+
+    .loginCard button:hover {
+      background: #8374ff;
+    }
+
+    #mainContainer {
+      display: flex;
+      width: 100%;
+      height: 100%;
+    }
+
+    #mapContainer {
+      flex: 1;
+      position: relative;
+      background: #0a0a0a;
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      cursor: grab;
+    }
+
+    canvas:active {
+      cursor: grabbing;
+    }
+
+    #sidePanel {
+      width: 300px;
+      background: #1d1d1d;
+      border-left: 1px solid #333;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    #sidePanelHeader {
+      padding: 16px;
+      border-bottom: 1px solid #333;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    #sidePanelHeader h3 {
+      font-size: 16px;
+    }
+
+    #logoutBtn {
+      padding: 6px 12px;
+      background: #6c5cff;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 12px;
+    }
+
+    #logoutBtn:hover {
+      background: #8374ff;
+    }
+
+    #peopleList {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px;
+    }
+
+    .personItem {
+      display: flex;
+      align-items: center;
+      padding: 8px;
+      margin-bottom: 8px;
+      background: #222;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+
+    .personItem input[type="checkbox"] {
+      margin-right: 10px;
+      cursor: pointer;
+    }
+
+    .personItem label {
+      flex: 1;
+      cursor: pointer;
+      font-size: 14px;
+    }
+
+    #controlPanel {
+      padding: 12px;
+      border-top: 1px solid #333;
+      display: flex;
+      gap: 8px;
+    }
+
+    #resetViewBtn {
+      flex: 1;
+      padding: 8px;
+      background: #6c5cff;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+    }
+
+    #resetViewBtn:hover {
+      background: #8374ff;
+    }
+
+    #tooltip {
+      position: fixed;
+      background: #222;
+      color: white;
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      pointer-events: none;
+      display: none;
+      z-index: 500;
+      border: 1px solid #444;
+      white-space: nowrap;
+    }
+  </style>
+</head>
+<body>
+
+<div id="loginScreen">
+  <div class="loginCard">
+    <h2>Admin Login</h2>
+    <input type="email" id="emailInput" placeholder="Email">
+    <input type="password" id="passwordInput" placeholder="Password">
+    <button onclick="handleLogin()">Login</button>
+  </div>
+</div>
+
+<div id="mainContainer" style="display: none;">
+  <div id="mapContainer">
+    <canvas id="canvas"></canvas>
+  </div>
+
+  <div id="sidePanel">
+    <div id="sidePanelHeader">
+      <h3>People</h3>
+      <button id="logoutBtn" onclick="handleLogout()">Logout</button>
+    </div>
+    <div id="peopleList"></div>
+    <div id="controlPanel">
+      <button id="resetViewBtn" onclick="resetView()">Reset View</button>
+    </div>
+  </div>
+</div>
+
+<div id="tooltip"></div>
+
+<script type="module">
+
+import { createClient }
+from "https://esm.sh/@supabase/supabase-js"
+
+const SUPABASE_URL =
+"https://emlucyknoalmhnhpuacr.supabase.co"
+
+const SUPABASE_KEY =
+"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVtbHVjeWtub2FsbWhuaHB1YWNyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgxNzUxMzUsImV4cCI6MjA5Mzc1MTEzNX0.ZlO3BU8OuKZnyvZNBA4jmVPsjTTAyMu91Qib2vul3tU"
+
+const supabase =
+createClient(SUPABASE_URL, SUPABASE_KEY)
+
+const loginScreen =
+document.getElementById("loginScreen")
+
+const mainContainer =
+document.getElementById("mainContainer")
+
+const canvas =
+document.getElementById("canvas")
+
+const ctx =
+canvas.getContext("2d")
+
+const peopleList =
+document.getElementById("peopleList")
+
+const tooltip =
+document.getElementById("tooltip")
+
+let results = []
+let questions = []
+let visiblePeople = {}
+let zoomLevel = 1
+let panX = 0
+let panY = 0
+let isDragging = false
+let dragStartX = 0
+let dragStartY = 0
+let hoveredPerson = null
+
+window.handleLogin = async function(){
+
+  const email =
+  document.getElementById("emailInput").value.trim()
+
+  const password =
+  document.getElementById("passwordInput").value.trim()
+
+  if(!email || !password){
+    alert("Enter email and password")
+    return
+  }
+
+  const { data, error } =
+  await supabase.auth.signInWithPassword({ email, password })
+
+  if(error){
+    alert("Login error: " + error.message)
+    return
+  }
+
+  loginScreen.classList.add("hidden")
+  mainContainer.style.display = "flex"
+
+  await loadData()
+
+}
+
+window.handleLogout = async function(){
+
+  await supabase.auth.signOut()
+
+  loginScreen.classList.remove("hidden")
+  mainContainer.style.display = "none"
+
+  results = []
+  questions = []
+  visiblePeople = {}
+
+  document.getElementById("emailInput").value = ""
+  document.getElementById("passwordInput").value = ""
+
+}
+
+async function loadData(){
+
+  const { data: resultsData, error: resultsError } =
+  await supabase
+  .from("personality_results")
+  .select("*")
+
+  if(resultsError){
+    alert("Error loading results: " + resultsError.message)
+    return
+  }
+
+  const { data: questionsData, error: questionsError } =
+  await supabase
+  .from("personality_questions")
+  .select("*")
+  .eq("is_enabled", true)
+  .order("question_order", { ascending: true })
+
+  if(questionsError){
+    alert("Error loading questions: " + questionsError.message)
+    return
+  }
+
+  results = resultsData || []
+  questions = questionsData || []
+
+  results.forEach((person, idx) => {
+    visiblePeople[idx] = true
+  })
+
+  renderPeopleList()
+  renderCanvas()
+
+}
+
+function renderPeopleList(){
+
+  peopleList.innerHTML = ""
+
+  results.forEach((person, idx) => {
+
+    const item = document.createElement("div")
+    item.className = "personItem"
+
+    const checkbox = document.createElement("input")
+    checkbox.type = "checkbox"
+    checkbox.checked = visiblePeople[idx]
+    checkbox.onchange = (e) => {
+      visiblePeople[idx] = e.target.checked
+      renderCanvas()
+    }
+
+    const label = document.createElement("label")
+    label.textContent = person.name || `Person ${idx + 1}`
+
+    item.appendChild(checkbox)
+    item.appendChild(label)
+    peopleList.appendChild(item)
+
+  })
+
+}
+
+function calculatePoint(result, questionRows){
+
+  const answers = result.answers || []
+  const half = Math.ceil(answers.length / 2)
+
+  const firstHalf = answers.slice(0, half)
+  const secondHalf = answers.slice(half)
+
+  const firstQuestions = questionRows.slice(0, half)
+  const secondQuestions = questionRows.slice(half, answers.length)
+
+  let x = 0
+  let maxX = 0
+  let y = 0
+  let maxY = 0
+
+  firstHalf.forEach((answer, i) => {
+    const mul = Number(firstQuestions[i]?.mul ?? 1)
+    maxX += mul
+    if(answer === "Yes") x += mul
+  })
+
+  secondHalf.forEach((answer, i) => {
+    const mul = Number(secondQuestions[i]?.mul ?? 1)
+    maxY += mul
+    if(answer === "Yes") y += mul
+  })
+
+  return {
+    x: maxX > 0 ? x / maxX : 0,
+    y: maxY > 0 ? y / maxY : 0,
+    name: result.name,
+    compiled_answers: result.compiled_answers || ""
+  }
+
+}
+
+function renderCanvas(){
+
+  const width = canvas.offsetWidth
+  const height = canvas.offsetHeight
+
+  canvas.width = width
+  canvas.height = height
+
+  ctx.fillStyle = "#0a0a0a"
+  ctx.fillRect(0, 0, width, height)
+
+  ctx.strokeStyle = "#333"
+  ctx.lineWidth = 1
+
+  for(let i = 0; i <= 10; i++){
+    const x = (i / 10) * width * zoomLevel - panX
+    const y = (i / 10) * height * zoomLevel - panY
+
+    ctx.beginPath()
+    ctx.moveTo(x, 0)
+    ctx.lineTo(x, height)
+    ctx.stroke()
+
+    ctx.beginPath()
+    ctx.moveTo(0, y)
+    ctx.lineTo(width, y)
+    ctx.stroke()
+  }
+
+  ctx.strokeStyle = "#44ff44"
+  ctx.lineWidth = 3
+
+  const borderLeft = 0 * width * zoomLevel - panX
+  const borderRight = 1 * width * zoomLevel - panX
+  const borderTop = 0 * height * zoomLevel - panY
+  const borderBottom = 1 * height * zoomLevel - panY
+
+  ctx.strokeRect(borderLeft, borderTop, borderRight - borderLeft, borderBottom - borderTop)
+
+  results.forEach((result, idx) => {
+
+    if(!visiblePeople[idx]) return
+
+    const point = calculatePoint(result, questions)
+
+    const screenX = point.x * width * zoomLevel - panX
+    const screenY = point.y * height * zoomLevel - panY
+
+    if(screenX < -50 || screenX > width + 50 ||
+       screenY < -50 || screenY > height + 50){
+      return
+    }
+
+    const isHovered = hoveredPerson === idx
+
+    ctx.fillStyle = isHovered ? "#ff6b6b" : "#6c5cff"
+    ctx.beginPath()
+    ctx.arc(screenX, screenY, isHovered ? 8 : 6, 0, Math.PI * 2)
+    ctx.fill()
+
+    ctx.fillStyle = "#999"
+    ctx.font = "12px Arial"
+    ctx.textAlign = "left"
+    ctx.fillText(result.name || `Person ${idx + 1}`, screenX + 10, screenY - 5)
+
+  })
+
+}
+
+window.resetView = function(){
+
+  zoomLevel = 1
+  panX = 0
+  panY = 0
+  hoveredPerson = null
+  renderCanvas()
+
+}
+
+canvas.addEventListener("wheel", (e) => {
+
+  e.preventDefault()
+
+  const zoomAmount = 0.1
+  const newZoom = zoomLevel + (e.deltaY > 0 ? -zoomAmount : zoomAmount)
+  zoomLevel = Math.max(0.5, Math.min(newZoom, 5))
+
+  renderCanvas()
+
+})
+
+canvas.addEventListener("mousedown", (e) => {
+
+  isDragging = true
+  dragStartX = e.clientX
+  dragStartY = e.clientY
+
+})
+
+canvas.addEventListener("mousemove", (e) => {
+
+  if(isDragging){
+
+    const dx = e.clientX - dragStartX
+    const dy = e.clientY - dragStartY
+
+    panX -= dx
+    panY -= dy
+
+    dragStartX = e.clientX
+    dragStartY = e.clientY
+
+    renderCanvas()
+
+  }else{
+
+    const rect = canvas.getBoundingClientRect()
+    const mouseX = e.clientX - rect.left
+    const mouseY = e.clientY - rect.top
+
+    hoveredPerson = null
+
+    results.forEach((result, idx) => {
+
+      if(!visiblePeople[idx]) return
+
+      const point = calculatePoint(result, questions)
+      const screenX = point.x * canvas.width * zoomLevel - panX
+      const screenY = point.y * canvas.height * zoomLevel - panY
+
+      const dist = Math.sqrt(
+        (mouseX - screenX) ** 2 +
+        (mouseY - screenY) ** 2
+      )
+
+      if(dist < 10){
+        hoveredPerson = idx
+
+        tooltip.style.display = "block"
+        tooltip.style.left = (e.clientX + 10) + "px"
+        tooltip.style.top = (e.clientY + 10) + "px"
+        tooltip.innerHTML = `
+          <strong>${result.name || "Unknown"}</strong><br>
+          X: ${(point.x * 100).toFixed(1)}%<br>
+          Y: ${(point.y * 100).toFixed(1)}%<br>
+          Answers: ${result.compiled_answers || "N/A"}
+        `
+
+      }
+
+    })
+
+    if(hoveredPerson === null){
+      tooltip.style.display = "none"
+    }
+
+    renderCanvas()
+
+  }
+
+})
+
+canvas.addEventListener("mouseup", () => {
+
+  isDragging = false
+
+})
+
+canvas.addEventListener("mouseleave", () => {
+
+  isDragging = false
+  hoveredPerson = null
+  tooltip.style.display = "none"
+  renderCanvas()
+
+})
+
+</script>
+
+</body>
+</html>

@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Personality Test</title>
+
+  <style>
+    body{
+      background:#111;
+      color:white;
+      font-family:Arial;
+      padding:40px;
+      text-align:center;
+    }
+
+    .card{
+      max-width:600px;
+      margin:60px auto;
+      padding:30px;
+      background:#1d1d1d;
+      border-radius:16px;
+    }
+
+    h2{
+      font-size:28px;
+    }
+
+    button{
+      padding:16px 28px;
+      margin:10px;
+      background:#6c5cff;
+      color:white;
+      border:none;
+      border-radius:10px;
+      cursor:pointer;
+      font-size:20px;
+      font-weight:bold;
+    }
+
+    button:hover{
+      background:#8374ff;
+    }
+
+    input{
+      width:90%;
+      padding:14px;
+      margin-top:12px;
+      background:#222;
+      color:white;
+      border:none;
+      border-radius:8px;
+      font-size:18px;
+    }
+
+    #progress{
+      opacity:0.7;
+      margin-bottom:20px;
+    }
+  </style>
+</head>
+<body>
+
+<h1>Personality Test</h1>
+
+<div class="card" id="nameScreen">
+  <h2>Enter your name</h2>
+  <input id="name" placeholder="Your name">
+  <br><br>
+  <button onclick="startTest()">Start</button>
+</div>
+
+<div class="card" id="questionScreen" style="display:none;">
+  <div id="progress"></div>
+  <h2 id="questionText"></h2>
+
+  <button onclick="answerQuestion('Yes')">Yes</button>
+  <button onclick="answerQuestion('No')">No</button>
+
+  <p>Keyboard: Y / Z = Yes, N = No</p>
+</div>
+
+<div class="card" id="doneScreen" style="display:none;">
+  <h2>Submitted!</h2>
+  <p>Thanks for doing the test.</p>
+</div>
+
+<script type="module">
+
+import { createClient }
+from "https://esm.sh/@supabase/supabase-js"
+
+const SUPABASE_URL =
+"https://emlucyknoalmhnhpuacr.supabase.co"
+
+const SUPABASE_KEY =
+"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVtbHVjeWtub2FsbWhuaHB1YWNyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgxNzUxMzUsImV4cCI6MjA5Mzc1MTEzNX0.ZlO3BU8OuKZnyvZNBA4jmVPsjTTAyMu91Qib2vul3tU"
+
+const supabase =
+createClient(SUPABASE_URL, SUPABASE_KEY)
+
+let questions = []
+
+let currentQuestion = 0
+let answers = []
+let userName = ""
+
+const nameScreen =
+document.getElementById("nameScreen")
+
+const questionScreen =
+document.getElementById("questionScreen")
+
+const doneScreen =
+document.getElementById("doneScreen")
+
+const questionText =
+document.getElementById("questionText")
+
+const progress =
+document.getElementById("progress")
+
+window.startTest = function(){
+
+  startTestFlow()
+
+}
+
+async function startTestFlow(){
+
+  userName =
+  document.getElementById("name").value.trim()
+
+  if(userName.length < 1){
+    alert("Enter your name first")
+    return
+  }
+
+  const { data, error } =
+  await supabase
+  .from("personality_questions")
+  .select("question")
+  .eq("is_enabled", true)
+  .order("question_order", { ascending: true })
+
+  if(error){
+    alert("Failed to load questions: " + error.message)
+    return
+  }
+
+  questions =
+  data.map(row => row.question)
+
+  if(questions.length === 0){
+    alert("No questions are available right now")
+    return
+  }
+
+  nameScreen.style.display = "none"
+  questionScreen.style.display = "block"
+
+  showQuestion()
+
+}
+
+function showQuestion(){
+
+  progress.textContent =
+  `Question ${currentQuestion + 1} / ${questions.length}`
+
+  questionText.textContent =
+  questions[currentQuestion]
+
+}
+
+window.answerQuestion = async function(answer){
+
+  answers.push(answer)
+
+  currentQuestion++
+
+  if(currentQuestion >= questions.length){
+
+    await submitTest()
+    return
+
+  }
+
+  showQuestion()
+
+}
+
+async function submitTest(){
+
+  questionScreen.style.display = "none"
+
+  const compiledAnswers =
+  answers.map(answer => answer === "Yes" ? "1" : "0").join("")
+
+  const { error } =
+  await supabase
+  .from("personality_results")
+  .insert({
+
+    name: userName,
+
+    questions: questions,
+
+    answers: answers,
+
+    compiled_answers: compiledAnswers,
+
+    metadata: {
+      browser: navigator.userAgent,
+      submittedAt: new Date().toISOString(),
+      inputType: "yes_no_buttons"
+    }
+
+  })
+
+  if(error){
+
+    alert("Error: " + error.message)
+    console.error(error)
+
+    questionScreen.style.display = "block"
+
+  }else{
+
+    doneScreen.style.display = "block"
+
+  }
+
+}
+
+document.addEventListener("keydown", function(event){
+
+  const key =
+  event.key.toLowerCase()
+
+  if(questionScreen.style.display !== "block"){
+    return
+  }
+
+  if(key === "y" || key === "z"){
+    answerQuestion("Yes")
+  }
+
+  if(key === "n"){
+    answerQuestion("No")
+  }
+
+})
+
+</script>
+
+</body>
+</html>
