@@ -380,41 +380,56 @@ function renderPeopleList(){
 
 }
 
-function calculatePoint(result, questionRows){
-
+function calculatePointAndColor(result, questionRows) {
   const answers = result.answers || []
-  const half = Math.ceil(answers.length / 2)
 
-  const firstHalf = answers.slice(0, half)
-  const secondHalf = answers.slice(half)
+  const xStart = 0
+  const xEnd = 30
 
-  const firstQuestions = questionRows.slice(0, half)
-  const secondQuestions = questionRows.slice(half, answers.length)
+  const yStart = 30
+  const yEnd = 60
 
-  let x = 0
-  let maxX = 0
-  let y = 0
-  let maxY = 0
+  const memeStart = 60
+  const memeEnd = 96
 
-  firstHalf.forEach((answer, i) => {
-    const mul = Number(firstQuestions[i]?.mul ?? 1)
-    maxX += mul
-    if(answer === "Yes") x += mul
-  })
+  function scoreRange(start, end) {
+    let total = 0
+    let max = 0
 
-  secondHalf.forEach((answer, i) => {
-    const mul = Number(secondQuestions[i]?.mul ?? 1)
-    maxY += mul
-    if(answer === "Yes") y += mul
-  })
+    for (let i = start; i < end; i++) {
+      const answer = answers[i] || "No"
+      const mul = Number(questionRows[i]?.mul ?? 1)
 
-  return {
-    x: maxX > 0 ? x / maxX : 0,
-    y: maxY > 0 ? y / maxY : 0,
-    name: result.name,
-    compiled_answers: result.compiled_answers || ""
+      max += mul
+
+      if (answer === "Yes") {
+        total += mul
+      }
+    }
+
+    return max > 0 ? total / max : 0
   }
 
+  const x = scoreRange(xStart, xEnd)
+  const y = scoreRange(yStart, yEnd)
+
+  let memeBits = ""
+
+  for (let i = memeStart; i < memeEnd; i++) {
+    memeBits += answers[i] === "Yes" ? "1" : "0"
+  }
+
+  const memeNumber = parseInt(memeBits || "0", 2)
+  const hue = Number.isFinite(memeNumber) ? memeNumber % 360 : 0
+  const color = `hsl(${hue}, 90%, 60%)`
+
+  return {
+    x,
+    y,
+    color,
+    memeBits,
+    hue
+  }
 }
 
 function renderCanvas(){
@@ -460,7 +475,7 @@ function renderCanvas(){
 
     if(!visiblePeople[idx]) return
 
-    const point = calculatePoint(result, questions)
+    const point = calculatePointAndColor(result, questions)
 
     const screenX = point.x * width * zoomLevel - panX
     const screenY = point.y * height * zoomLevel - panY
@@ -472,10 +487,18 @@ function renderCanvas(){
 
     const isHovered = hoveredPerson === idx
 
-    ctx.fillStyle = isHovered ? "#ff6b6b" : "#6c5cff"
+    ctx.fillStyle = point.color
     ctx.beginPath()
     ctx.arc(screenX, screenY, isHovered ? 8 : 6, 0, Math.PI * 2)
     ctx.fill()
+
+    if(isHovered){
+      ctx.strokeStyle = "#ffffff"
+      ctx.lineWidth = 2
+      ctx.beginPath()
+      ctx.arc(screenX, screenY, 10, 0, Math.PI * 2)
+      ctx.stroke()
+    }
 
     ctx.fillStyle = "#999"
     ctx.font = "12px Arial"
@@ -543,7 +566,7 @@ canvas.addEventListener("mousemove", (e) => {
 
       if(!visiblePeople[idx]) return
 
-      const point = calculatePoint(result, questions)
+      const point = calculatePointAndColor(result, questions)
       const screenX = point.x * canvas.width * zoomLevel - panX
       const screenY = point.y * canvas.height * zoomLevel - panY
 
@@ -560,9 +583,11 @@ canvas.addEventListener("mousemove", (e) => {
         tooltip.style.top = (e.clientY + 10) + "px"
         tooltip.innerHTML = `
           <strong>${result.name || "Unknown"}</strong><br>
-          X: ${(point.x * 100).toFixed(1)}%<br>
-          Y: ${(point.y * 100).toFixed(1)}%<br>
-          Answers: ${result.compiled_answers || "N/A"}
+          X: ${point.x.toFixed(4)}<br>
+          Y: ${point.y.toFixed(4)}<br>
+          Hue: ${point.hue}<br>
+          Meme Bits: ${point.memeBits}<br>
+          Compiled Answers: ${result.compiled_answers || "N/A"}
         `
 
       }
